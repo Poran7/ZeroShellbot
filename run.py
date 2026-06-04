@@ -1,3 +1,6 @@
+import sys
+print(f"Python version: {sys.version}")
+
 import logging
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -154,7 +157,6 @@ async def post_init(application):
     ])
     await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
-# Simple HTTP server to keep Render free tier alive
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -168,11 +170,9 @@ def run_http_server():
     server.serve_forever()
 
 def main():
-    # Start HTTP server in background thread
     thread = threading.Thread(target=run_http_server, daemon=True)
     thread.start()
     logger.info("✅ Health check server started on port 8080")
-
     app = Application.builder().token(TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
