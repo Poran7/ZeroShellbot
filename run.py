@@ -1,4 +1,6 @@
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, MenuButtonCommands
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
@@ -17,22 +19,8 @@ user_lang = {}
 
 TEXTS = {
     'en': {
-        'welcome': (
-            "👋 Hello {name}!\n\n"
-            "🤖 Welcome to ZeroShell Bot!\n\n"
-            "📢 Channel: {channel}\n"
-            "👥 Group: {group}\n\n"
-            "Select an option below:"
-        ),
-        'services': (
-            "🛠 Our Services:\n\n"
-            "☁️ Private Cloud\n"
-            "📧 Hotmail Checker\n"
-            "🔀 Mix Checker\n"
-            "🎯 Custom Target\n"
-            "🎯 Private Hits\n\n"
-            "💬 To buy, contact Admin: @ZeroSheII 👇"
-        ),
+        'welcome': "👋 Hello {name}!\n\n🤖 Welcome to ZeroShell Bot!\n\n📢 Channel: {channel}\n👥 Group: {group}\n\nSelect an option below:",
+        'services': "🛠 Our Services:\n\n☁️ Private Cloud\n📧 Hotmail Checker\n🔀 Mix Checker\n🎯 Custom Target\n🎯 Private Hits\n\n💬 To buy, contact Admin: @ZeroSheII 👇",
         'help': "📚 Commands:\n\n/start - Start Bot\n/help - Help\n/about - About\n/services - Our Services\n\nJoin our community! 👇",
         'about': "🤖 ZeroShell Bot\n\n⚙️ Made with Python\n❤️ Built with love\n\nJoin our community! 👇",
         'join_channel': "📢 Channel",
@@ -46,22 +34,8 @@ TEXTS = {
         'default_reply': "You said: '{msg}' 😊\n\nJoin our group to chat! 👇",
     },
     'ru': {
-        'welcome': (
-            "👋 Привет {name}!\n\n"
-            "🤖 Добро пожаловать в ZeroShell Bot!\n\n"
-            "📢 Канал: {channel}\n"
-            "👥 Группа: {group}\n\n"
-            "Выберите вариант ниже:"
-        ),
-        'services': (
-            "🛠 Наши услуги:\n\n"
-            "☁️ Private Cloud\n"
-            "📧 Hotmail Checker\n"
-            "🔀 Mix Checker\n"
-            "🎯 Custom Target\n"
-            "🎯 Private Hits\n\n"
-            "💬 Для покупки, напишите Админу: @ZeroSheII 👇"
-        ),
+        'welcome': "👋 Привет {name}!\n\n🤖 Добро пожаловать в ZeroShell Bot!\n\n📢 Канал: {channel}\n👥 Группа: {group}\n\nВыберите вариант ниже:",
+        'services': "🛠 Наши услуги:\n\n☁️ Private Cloud\n📧 Hotmail Checker\n🔀 Mix Checker\n🎯 Custom Target\n🎯 Private Hits\n\n💬 Для покупки, напишите Админу: @ZeroSheII 👇",
         'help': "📚 Команды:\n\n/start - Старт\n/help - Помощь\n/about - О боте\n/services - Услуги\n\nПрисоединяйтесь! 👇",
         'about': "🤖 ZeroShell Bot\n\n⚙️ Создан на Python\n❤️ Сделан с любовью\n\nПрисоединяйтесь! 👇",
         'join_channel': "📢 Канал",
@@ -145,7 +119,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     await query.answer()
-
     if query.data == 'lang_en':
         user_lang[user_id] = 'en'
         lang = 'en'
@@ -173,7 +146,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(TEXTS[lang]['services'], reply_markup=get_services_keyboard(lang))
 
 async def post_init(application):
-    # Set bot commands - this makes /start always visible
     await application.bot.set_my_commands([
         BotCommand("start", "▶️ Start Bot"),
         BotCommand("services", "🛠 Services"),
@@ -181,9 +153,26 @@ async def post_init(application):
         BotCommand("about", "🤖 About"),
     ])
     await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-    logger.info("✅ Bot commands set!")
+
+# Simple HTTP server to keep Render free tier alive
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"ZeroShell Bot is running!")
+    def log_message(self, format, *args):
+        pass
+
+def run_http_server():
+    server = HTTPServer(('0.0.0.0', 8080), HealthHandler)
+    server.serve_forever()
 
 def main():
+    # Start HTTP server in background thread
+    thread = threading.Thread(target=run_http_server, daemon=True)
+    thread.start()
+    logger.info("✅ Health check server started on port 8080")
+
     app = Application.builder().token(TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
